@@ -126,6 +126,24 @@ jobs:
           fi
           git push
         id: git-status-24
+      - name: Merge upstream 2.5
+        run: |
+          git checkout --track origin/r2.5
+          git pull
+          git fetch upstream
+          git merge --no-edit upstream/r2.5
+          status=`git status`
+          echo "status: ${status}"
+          readonly local commits_check=$(echo "$status" | grep -c 'ahead' )
+          if [[ "$commits_check" -eq 0 ]]; then
+            echo "Branch has no new changes."
+            echo "::set-output name=skip::true"
+          else
+            echo "Branch has new commits, proceeding to run CodeBuild project."
+            echo "::set-output name=skip::false"
+          fi
+          git push
+        id: git-status-25
       - name: Checkout master branch
         run: git checkout master
       - name: Run CodeBuild 1.15
@@ -188,4 +206,13 @@ jobs:
             TF_VERSION
         env:
           TF_VERSION: 2.4
-
+      - name: Run CodeBuild 2.5
+        if: steps.git-status-25.outputs.skip == 'false'
+        uses: aws-actions/aws-codebuild-run-build@v1.0.3
+        with:
+          project-name: Tensorflow-git-auto-sync
+          buildspec-override: aws-ci/git-sync.yml
+          env-vars-for-codebuild: |
+            TF_VERSION
+        env:
+          TF_VERSION: 2.5
